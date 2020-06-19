@@ -12,12 +12,18 @@ enum SectionType {
     case ceo, peasants
 }
 
-struct Contact: Hashable {
+class Contact: NSObject {
     let name: String
+    var isFavourite = false
+    
+    init(name: String) {
+        self.name = name
+    }
 }
 
 class ContactViewModel: ObservableObject {
     @Published var name = ""
+    @Published var isFavourite = false
 }
 
 struct ContactRowView: View {
@@ -29,7 +35,8 @@ struct ContactRowView: View {
             Image(systemName: "person.fill")
             Text(viewModel.name)
             Spacer()
-            Image(systemName: "star")
+            Image(systemName: viewModel.isFavourite ? "star.fill" : "star")
+                .font(.system(size: 24))
         }.padding(20)
     }
 }
@@ -58,13 +65,19 @@ class ContactCell: UITableViewCell {
     }
 }
 
+class ContactsSource: UITableViewDiffableDataSource<SectionType, Contact> {
+    override func tableView(_ tableView: UITableView, canEditRowAt indexPath: IndexPath) -> Bool {
+        true
+    }
+}
 
 class DiffableTableViewController: UITableViewController {
     
-    lazy var source = UITableViewDiffableDataSource<SectionType, Contact>.init(tableView: self.tableView) { (tv, indexPath, contact) -> UITableViewCell? in
+    lazy var source = ContactsSource.init(tableView: self.tableView) { (tv, indexPath, contact) -> UITableViewCell? in
         
         let cell = ContactCell(style: .default, reuseIdentifier: nil)
         cell.viewModel.name = contact.name
+        cell.viewModel.isFavourite = contact.isFavourite
         return cell
     }
     
@@ -72,7 +85,48 @@ class DiffableTableViewController: UITableViewController {
         super.viewDidLoad()
         navigationController?.navigationBar.prefersLargeTitles = true
         navigationItem.title = "Contacts"
+        navigationItem.rightBarButtonItem = UIBarButtonItem(title: "Add", style: .plain, target: self, action: #selector(handleAdd))
         setupSource()
+    }
+    
+    override func tableView(_ tableView: UITableView, trailingSwipeActionsConfigurationForRowAt indexPath: IndexPath) -> UISwipeActionsConfiguration? {
+        let deleteAction = UIContextualAction(style: .destructive, title: "Delete") { (action, view, completion) in
+            completion(true)
+            
+            var snapshot = self.source.snapshot()
+            guard let contact = self.source.itemIdentifier(for: indexPath) else { return }
+            snapshot.deleteItems([contact])
+            self.source.apply(snapshot)
+            
+        }
+        
+        let favouriteAction = UIContextualAction(style: .normal, title: "Favourite") { (action, view, completion) in
+            completion(true)
+            
+            var snapshot = self.source.snapshot()
+            guard let contact = self.source.itemIdentifier(for: indexPath) else { return }
+            contact.isFavourite.toggle()
+            snapshot.reloadItems([contact])
+            self.source.apply(snapshot)
+            
+        }
+        
+        return .init(actions: [deleteAction, favouriteAction])
+    }
+    
+    @objc
+    private func handleAdd() {
+        let formView = ContactForvView { (name, sectionType)  in
+            
+            self.dismiss(animated: true, completion: nil)
+            
+            var snapshot = self.source.snapshot()
+            snapshot.appendItems([.init(name: name)], toSection: sectionType)
+            self.source.apply(snapshot)
+        }
+        
+        let hostingController = UIHostingController(rootView: formView)
+        present(hostingController, animated: true, completion: nil)
     }
     
     private func setupSource() {
@@ -115,17 +169,52 @@ struct DiffableContainer: UIViewControllerRepresentable {
         
     }
     
+}
+
+struct ContactForvView: View {
     
+    var didAddContact: (String, SectionType) -> Void = { _,_ in }
+    @State private var bindableName: String = ""
+    @State private var bindableSection = SectionType.ceo
+    
+    var body: some View {
+        VStack(spacing: 20) {
+            TextField("Name", text: $bindableName)
+            Picker(selection: $bindableSection, label: Text("")) {
+                Text("CEO").tag(SectionType.ceo)
+                Text("Peasants").tag(SectionType.peasants)
+            }.pickerStyle(SegmentedPickerStyle())
+            Button(action: {
+                self.didAddContact(self.bindableName, self.bindableSection)
+            }, label: {
+                HStack {
+                    Spacer()
+                    Text("Add")
+                        .foregroundColor(.white)
+                    Spacer()
+                }
+                    .padding()
+                    .background(Color.blue)
+            }).cornerRadius(5)
+            Spacer()
+        }.padding()
+    }
 }
 
 struct ContentView: View {
     var body: some View {
-        Text("Hello, World!")
+        DiffableContainer()
     }
 }
 
 struct ContentView_Previews: PreviewProvider {
     static var previews: some View {
         DiffableContainer()
+    }
+}
+
+struct ContactFormPreview: PreviewProvider {
+    static var previews: some View {
+        ContactForvView()
     }
 }
