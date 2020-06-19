@@ -16,17 +16,32 @@ struct Contact: Hashable {
     let name: String
 }
 
+class ContactViewModel: ObservableObject {
+    @Published var name = ""
+}
+
 struct ContactRowView: View {
+    
+    @ObservedObject var viewModel: ContactViewModel
+    
     var body: some View {
-        Text("Row")
+        HStack {
+            Image(systemName: "person.fill")
+            Text(viewModel.name)
+            Spacer()
+            Image(systemName: "star")
+        }.padding(20)
     }
 }
 
 class ContactCell: UITableViewCell {
+    
+    let viewModel = ContactViewModel()
+    
     override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
         super.init(style: style, reuseIdentifier: reuseIdentifier)
         
-        let hostingController = UIHostingController(rootView: ContactRowView())
+        let hostingController = UIHostingController(rootView: ContactRowView(viewModel: viewModel))
         addSubview(hostingController.view)
         hostingController.view.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([
@@ -49,7 +64,7 @@ class DiffableTableViewController: UITableViewController {
     lazy var source = UITableViewDiffableDataSource<SectionType, Contact>.init(tableView: self.tableView) { (tv, indexPath, contact) -> UITableViewCell? in
         
         let cell = ContactCell(style: .default, reuseIdentifier: nil)
-        cell.textLabel?.text = contact.name
+        cell.viewModel.name = contact.name
         return cell
     }
     
@@ -57,7 +72,6 @@ class DiffableTableViewController: UITableViewController {
         super.viewDidLoad()
         navigationController?.navigationBar.prefersLargeTitles = true
         navigationItem.title = "Contacts"
-        
         setupSource()
     }
     
@@ -83,6 +97,10 @@ class DiffableTableViewController: UITableViewController {
     }
     
     override func tableView(_ tableView: UITableView, heightForHeaderInSection section: Int) -> CGFloat {
+        return 50
+    }
+    
+    override func tableView(_ tableView: UITableView, heightForRowAt indexPath: IndexPath) -> CGFloat {
         return 50
     }
 }
